@@ -1,10 +1,13 @@
 # devtools::install_github("hrbrmstr/omdbapi")
 # library(omdbapi)
-library(feather)
 library(rvest)
 library(tidyverse)
 library(stringr)
 library(purrr)
+library(forcats)
+library(plotly)
+library(tidytext)
+
 
 best_movies_raw <- read_html("http://www.imdb.com/chart/top")
 
@@ -147,27 +150,83 @@ best_movies <-
     mutate(addtional_info = movie_info)
 
 
-saveRDS(best_movies, "best_movies.rds")
-read
+
+
+
+
+
+best_movies <- as_tibble(readRDS("best_movies.rds"))
+
+best_movies <- 
+  best_movies %>%
+    mutate(year = as.integer(year),
+           rating = as.numeric(rating),
+           director = map_chr(addtional_info, ~.$director %>% str_c(collapse = ", ")),
+           metascore = addtional_info %>% map_chr("metascore") %>% as.integer(),
+           critic_audience_diff = metascore - rating*10,
+           language = map_chr(addtional_info, ~.$language %>% str_c(collapse = ", ")),
+           genres = map_chr(addtional_info, ~.$genres %>% str_c(collapse = ", ")))
+
+ratingVmeta <- 
+best_movies %>%
+  ggplot(aes(x = rating*10, y = metascore, text = movie)) +
+  geom_jitter(aes(size = votes, col = fct_lump(genres,5)), alpha = 0.5) +
+  scale_y_continuous(breaks = seq(60,100,5)) +
+  theme_minimal()
+# col = fct_lump(language,5)
+
+
+ggplotly(ratingVmeta)
+
+
 
 best_movies %>%
-  mutate(director = map_chr(addtional_info, ~.$director %>% str_c(collapse = ", ")))
+  filter(str_detect(genres,"Crime")) %>%
+    View()
 
 
-map(movie_info,"cast") %>% bind_rows() %>%
-  count(role, sort = T)
+best_movies %>%
+  select(movie,rating, metascore,critic_audience_diff, everything()) %>% 
+  arrange(abs(critic_audience_diff))
 
-# parent_func <- function(){
-#   x <- 1:5
-#   # print(environment())
-#   print(child_func())
-# }
-# 
-# child_func <- function(){
-#   x <- parent.frame()$x
-#   x <- x[1:2]
-# }
-# 
-# parent_func()
-# 
-# 
+best_movies$addtional_info %>% map_chr("metascore") %>%
+  is.na() %>% sum()
+
+words <- read_html('https://raw.githubusercontent.com/dwyl/english-words/master/words_alpha.txt')
+
+words_list <- 
+  words %>%
+    html_text() %>%
+    str_split("\\r\\n") %>%
+      .[[1]]
+
+words_df <- tibble(words = words_list)
+
+map(best_movies$addtional_info,"cast") %>% bind_rows() %>%
+  count(role, sort = T) %>%
+  mutate(role = role %>% tolower() %>% str_trim()) %>% 
+    semi_join(words_df, by = c("role" = "words")) %>%
+      arrange(desc(n))
+
+
+best_movies %>%
+  mutate(num_genres = genres %>% str_count(",")) %>%
+    filter(num_genres == 1)
+  
+best_movies %>%
+  count(genres, sort = T)
+
+
+individual_genres <- 
+  best_movies %>%
+    pull(genres) %>%
+      str_split(", ") %>%
+        unlist() %>%
+          tibble(genres = .)
+count(individual_genres, genres, sort = T) %>%
+  mutate(sn = row_number()) %>% 
+  ggplot(aes(sn,n)) + geom_line()
+
+
+
+saveRDS(best_movies, "best_movies.rds")
