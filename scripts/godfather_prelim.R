@@ -46,11 +46,13 @@ book_sentences %>%
 useful_words <- 
   book_sentences %>% 
   unnest_tokens(word, text) %>% 
-  anti_join(stop_words, by = "word") %>% 
-  count(word, sort = T)
+  anti_join(stop_words, by = "word")
+
+useful_words %>% write_feather("data/godfather_book_words.feather")
 
 # sentiments <- 
   useful_words %>%
+  count(word, sort = T)%>%
   inner_join(get_sentiments("bing")) %>% 
   group_by(sentiment) %>%
   arrange(desc(n)) %>% 
