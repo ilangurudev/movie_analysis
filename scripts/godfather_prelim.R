@@ -1,10 +1,10 @@
-pacman::p_load(tidyverse, tidytext, pdftools, feather, rebus)
-
+pacman::p_load(tidyverse, tidytext, pdftools, feather, rebus, wordcloud, ggrepel, viridisLite)
+devtools::install_github("r-lib/svglite")
 
 book <- pdf_text("data/godafather_book.pdf")
 movie <- pdf_text("data/godfather_screenplay.pdf")
 
-pdf_attachments("data/godafather_book.pdf")
+# pdf_attachments("data/godafather_book.pdf")
 
 book[2] <- book[2] %>% str_replace("Behind every great fortune there is a crime – Balzac", "")
   
@@ -52,7 +52,7 @@ useful_words %>% write_feather("data/godfather_book_words.feather")
 
 # sentiments <- 
   useful_words %>%
-  count(word, sort = T)%>%
+  count(word, sort = T) %>%
   inner_join(get_sentiments("bing")) %>% 
   group_by(sentiment) %>%
   arrange(desc(n)) %>% 
@@ -64,6 +64,29 @@ useful_words %>% write_feather("data/godfather_book_words.feather")
   geom_bar(stat = "identity") +
   coord_flip() +
   theme_minimal()
+
+x <- 
+  useful_words %>%
+  count(word, sentiment, sort = 100) 
+
+
+set.seed(1)
+# cairo_pdf("plots/wordcloud.pdf")
+svglite("plots/wordcloud.svg")
+wordcloud(x$word, x$n, max.words = 200, colors = rev(viridis(50)))
+dev.off()
+
+
+x %>% 
+  top_n(50) %>% 
+  ggplot(aes(x = 1, y = 1, size = n, label = word, col = -n))   +
+  geom_text_repel(segment.size = 0, force = 10) +
+  scale_size(range = c(5, 10), guide = FALSE) +
+  scale_y_continuous(breaks = NULL) +
+  scale_x_continuous(breaks = NULL) +
+  scale_color_gradient(low = "darkgreen", high = "darkred") +
+  labs(x = '', y = '') +
+  theme_classic()
 
 
 # 
